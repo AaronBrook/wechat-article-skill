@@ -91,4 +91,3 @@ python3.10 run_wechat_article.py --mode publish --from-json "output/articles/<bu
 ## 文档说明
 - 如果你想看整体调用链路，读 [docs/WORKFLOW.md](docs/WORKFLOW.md)
 - 如果你想排查微信标题、摘要、IP 白名单、图片不显示，读 [docs/WECHAT.md](docs/WECHAT.md)
-- 如果你想看一篇面向读者的介绍文章，读 [weixin.md](weixin.md)
