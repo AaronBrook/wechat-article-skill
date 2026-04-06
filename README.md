@@ -10,17 +10,24 @@
 - 创建公众号草稿，供你在后台二次编辑后发布
 
 ## 文生图说明
-本项目的文生图能力使用的是**阿里云百炼 / 通义千问图像生成能力**，通过 [text_2_image.py](text_2_image.py) 调用 DashScope 接口完成。
+本项目的文生图能力现在支持两种后端，统一通过 [text_2_image.py](text_2_image.py) 调用：
 
-当前用法依赖：
-- `DASHSCOPE_API_KEY`
-- 文生图模型参数（默认在代码里配置）
+- **阿里云百炼 / 通义千问图像生成能力（Wanx）**
+- **Nano Banana 2**（通过 OpenAI 兼容 relay API 接入）
+
+当前常用配置：
+- Wanx：`DASHSCOPE_API_KEY`
+- Nano Banana 2：`NANO_BANANA_BASE_URL`、`NANO_BANANA_API_KEY`、`NANO_BANANA_MODEL`
+- 后端选择：`IMAGE_BACKEND=wanx` 或 `IMAGE_BACKEND=nano_banana_2`
 
 用途分为两类：
 - 封面图生成
 - 正文分段配图生成
 
-也就是说，这个工程里的“自动配图”不是本地模型生成，也不是 OpenAI 图像接口，而是**阿里千问生图能力**。
+说明：
+- 真实发布时，最终仍然是把本地图片上传到微信，因此不管前面用 Wanx 还是 Nano Banana 2，后续发布链路都不需要变。
+- 默认仍是 Wanx，只有在显式切换 `IMAGE_BACKEND` 或传入 `--image-backend nano_banana_2` 时，才走 Nano Banana 2。
+- 发布到公众号草稿箱时，正文会自动移除开头那张封面图，只保留公众号封面位，避免草稿预览里首图重复或显示异常。
 
 ## 项目结构
 - [SKILL.md](SKILL.md)：机器使用的 Prompt 与输出契约
@@ -36,6 +43,10 @@
 
 ```env
 DASHSCOPE_API_KEY=
+IMAGE_BACKEND=wanx
+NANO_BANANA_BASE_URL=https://api.laozhang.ai/v1
+NANO_BANANA_API_KEY=
+NANO_BANANA_MODEL=gemini-3.1-flash-image-preview
 
 WECHAT_OFFICIAL_ACCOUNT_APP_ID=
 WECHAT_OFFICIAL_ACCOUNT_APP_SECRET=
@@ -64,17 +75,22 @@ GITHUB_PAGES_BASE_URL=
 python3.10 run_wechat_article.py "90年代的年轻人如何努力"
 ```
 
-### 2. 生成文章并配图
+### 2. 生成文章并配图（默认 Wanx）
 ```bash
 python3.10 run_wechat_article_with_images.py "90年代的年轻人如何努力"
 ```
 
-### 3. 将现有文章发布到公众号草稿箱
+### 3. 使用 Nano Banana 2 生成文章并配图
+```bash
+python3.10 run_wechat_article_with_images.py "90年代的年轻人如何努力" --image-backend nano_banana_2 --image-model gemini-3.1-flash-image-preview
+```
+
+### 4. 将现有文章发布到公众号草稿箱
 ```bash
 python3.10 run_wechat_article.py --mode publish --from-json "output/articles/<bundle>/article.json"
 ```
 
-### 4. 只做发布预演
+### 5. 只做发布预演
 ```bash
 python3.10 run_wechat_article.py --mode publish --from-json "output/articles/<bundle>/article.json" --dry-run
 ```

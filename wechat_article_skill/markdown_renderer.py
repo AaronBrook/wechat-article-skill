@@ -36,6 +36,15 @@ def strip_top_level_title(markdown_text: str) -> str:
     return markdown_text[first_newline + 1 :].strip()
 
 
+def strip_leading_cover_image(markdown_text: str) -> str:
+    text = markdown_text.lstrip()
+    image_match = _IMAGE_PATTERN.match(text)
+    if not image_match:
+        return markdown_text.strip()
+    remainder = text[image_match.end():].lstrip("\r\n")
+    return remainder.strip()
+
+
 def strip_prompt_sections(markdown_text: str) -> str:
     lines = markdown_text.splitlines()
     kept_lines: list[str] = []

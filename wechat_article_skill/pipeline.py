@@ -12,6 +12,8 @@ from .publisher import publish_existing_article_from_json
 
 def _bundle_dir_from_article(markdown_path: str, title: str) -> Path:
     article_path = Path(markdown_path)
+    if article_path.name == "article.md" and article_path.parent.name != OUTPUT_DIR.name:
+        return article_path.parent
     base_name = article_path.stem
     slug = _slugify_filename(title)
     if slug and not base_name.endswith(slug):
@@ -24,8 +26,10 @@ def _copy_article_files(article_result: dict[str, Any], bundle_dir: Path) -> tup
     source_json = Path(article_result["json_path"])
     article_md = bundle_dir / "article.md"
     article_json = bundle_dir / "article.json"
-    shutil.copy2(source_markdown, article_md)
-    shutil.copy2(source_json, article_json)
+    if source_markdown.resolve() != article_md.resolve():
+        shutil.copy2(source_markdown, article_md)
+    if source_json.resolve() != article_json.resolve():
+        shutil.copy2(source_json, article_json)
     return article_md, article_json
 
 
@@ -108,6 +112,7 @@ def _generate_with_article_result(
     cover_size: str,
     body_size: str,
     image_style: str,
+    image_backend: str = "wanx",
 ) -> dict[str, Any]:
     title = str(article_result["title"])
     bundle_dir = _bundle_dir_from_article(article_result["markdown_path"], title)
@@ -135,6 +140,7 @@ def _generate_with_article_result(
             n=1,
             style=image_style,
             save_dir=str(cover_dir),
+            image_backend=image_backend,
         )
 
     prompts = article_result.get("image_prompts", [])
@@ -150,6 +156,7 @@ def _generate_with_article_result(
             n=1,
             style=image_style,
             save_dir=str(body_dir),
+            image_backend=image_backend,
         )
         body_results.append({"index": index, **result})
 
@@ -222,6 +229,7 @@ def generate_wechat_article_with_images(
     cover_size: str = "1280*720",
     body_size: str = "1024*1024",
     image_style: str = "<auto>",
+    image_backend: str = "wanx",
     output_dir: Path = OUTPUT_DIR,
 ) -> dict[str, Any]:
     article_result = generate_wechat_article(
@@ -237,6 +245,7 @@ def generate_wechat_article_with_images(
         cover_size=cover_size,
         body_size=body_size,
         image_style=image_style,
+        image_backend=image_backend,
     )
 
 
@@ -246,6 +255,7 @@ def generate_images_for_existing_article(
     cover_size: str = "1280*720",
     body_size: str = "1024*1024",
     image_style: str = "<auto>",
+    image_backend: str = "wanx",
 ) -> dict[str, Any]:
     article_result = _load_existing_article(article_json_path)
     return _generate_with_article_result(
@@ -255,6 +265,7 @@ def generate_images_for_existing_article(
         cover_size=cover_size,
         body_size=body_size,
         image_style=image_style,
+        image_backend=image_backend,
     )
 
 

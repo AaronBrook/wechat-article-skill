@@ -12,10 +12,14 @@
   export DASHSCOPE_API_KEY="your_api_key_here"
 """
 
+import base64
 import os
+import re
 import time
-import requests
 from enum import Enum
+from pathlib import Path
+
+import requests
 
 try:
     import dashscope
@@ -30,6 +34,36 @@ except ImportError:
 # ─────────────────────────────────────────────
 DASHSCOPE_API_KEY = os.environ.get("DASHSCOPE_API_KEY", "YOUR_API_KEY_HERE")
 BASE_URL = "https://dashscope.aliyuncs.com/api/v1"
+DEFAULT_IMAGE_BACKEND = os.environ.get("IMAGE_BACKEND", "wanx").strip() or "wanx"
+NANO_BANANA_BASE_URL = os.environ.get("NANO_BANANA_BASE_URL", "https://api.laozhang.ai/v1").strip().rstrip("/")
+NANO_BANANA_API_KEY = os.environ.get("NANO_BANANA_API_KEY", "")
+NANO_BANANA_MODEL = os.environ.get("NANO_BANANA_MODEL", "gemini-3.1-flash-image-preview").strip() or "gemini-3.1-flash-image-preview"
+_DATA_IMAGE_PATTERN = re.compile(r"data:image/(?P<ext>[a-zA-Z0-9.+-]+);base64,(?P<data>[A-Za-z0-9+/=\\s]+)")
+
+
+def _get_dashscope_api_key() -> str:
+    return os.environ.get("DASHSCOPE_API_KEY", DASHSCOPE_API_KEY)
+
+
+def _get_default_image_backend() -> str:
+    return os.environ.get("IMAGE_BACKEND", DEFAULT_IMAGE_BACKEND).strip() or "wanx"
+
+
+def _get_nano_banana_base_url() -> str:
+    return os.environ.get("NANO_BANANA_BASE_URL", NANO_BANANA_BASE_URL).strip().rstrip("/")
+
+
+def _get_nano_banana_api_key() -> str:
+    return os.environ.get("NANO_BANANA_API_KEY", NANO_BANANA_API_KEY).strip()
+
+
+def _get_nano_banana_model() -> str:
+    return os.environ.get("NANO_BANANA_MODEL", NANO_BANANA_MODEL).strip() or "gemini-3.1-flash-image-preview"
+
+
+class ImageBackend(str, Enum):
+    WANX = "wanx"
+    NANO_BANANA_2 = "nano_banana_2"
 
 
 class ImageModel(str, Enum):
@@ -62,7 +96,8 @@ class BailianText2ImageClient:
       3. 返回图片 URL 列表
     """
 
-    def __init__(self, api_key: str = DASHSCOPE_API_KEY):
+    def __init__(self, api_key: str | None = None):
+        api_key = api_key or _get_dashscope_api_key()
         if not api_key or api_key == "YOUR_API_KEY_HERE":
             raise ValueError("请设置有效的 DASHSCOPE_API_KEY")
         self.api_key = api_key
@@ -243,10 +278,10 @@ class BailianText2ImageClient:
 class BailianText2ImageSDK:
     """使用官方 dashscope SDK 的文生图客户端（更简洁）"""
 
-    def __init__(self, api_key: str = DASHSCOPE_API_KEY):
+    def __init__(self, api_key: str | None = None):
         if not DASHSCOPE_AVAILABLE:
             raise ImportError("请先安装：pip install dashscope")
-        dashscope.api_key = api_key
+        dashscope.api_key = api_key or _get_dashscope_api_key()
 
     def generate(
         self,
@@ -271,6 +306,111 @@ class BailianText2ImageSDK:
             raise RuntimeError(f"SDK 调用失败 [{rsp.status_code}]: {rsp.message}")
 
 
+class NanoBananaImageClient:
+    """OpenAI 兼容 relay 文生图客户端，响应中包含 base64 data URI。"""
+
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        default_model: str | None = None,
+    ) -> None:
+        api_key = api_key or _get_nano_banana_api_key()
+        base_url = base_url or _get_nano_banana_base_url()
+        default_model = default_model or _get_nano_banana_model()
+        if not api_key:
+            raise ValueError("请设置有效的 NANO_BANANA_API_KEY")
+        if not base_url:
+            raise ValueError("请设置有效的 NANO_BANANA_BASE_URL")
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.default_model = default_model or "gemini-3.1-flash-image-preview"
+        self.headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+    def _build_prompt(self, prompt: str, negative_prompt: str, size: str, style: str) -> str:
+        parts = [prompt.strip()]
+        if style and style != "<auto>":
+            parts.append(f"风格要求：{style}")
+        if size:
+            parts.append(f"画面尺寸偏好：{size}")
+        if negative_prompt.strip():
+            parts.append(f"避免出现：{negative_prompt.strip()}")
+        return "\n".join(part for part in parts if part)
+
+    def _extract_data_images(self, content: str) -> list[tuple[str, str]]:
+        matches = []
+        for match in _DATA_IMAGE_PATTERN.finditer(content):
+            ext = match.group("ext").lower()
+            data = re.sub(r"\s+", "", match.group("data"))
+            matches.append((ext, data))
+        return matches
+
+    def _save_base64_images(self, images: list[tuple[str, str]], save_dir: str | None) -> list[str]:
+        if not save_dir:
+            raise ValueError("Nano Banana 2 需要 save_dir 用于保存生成图片")
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+        saved_paths = []
+        for index, (ext, encoded) in enumerate(images):
+            image_bytes = base64.b64decode(encoded)
+            suffix = "jpg" if ext in {"jpeg", "jpg"} else ("png" if ext == "png" else ext)
+            filename = Path(save_dir) / f"generated_{int(time.time())}_{index}.{suffix}"
+            filename.write_bytes(image_bytes)
+            saved_paths.append(str(filename))
+        return saved_paths
+
+    def generate(
+        self,
+        prompt: str,
+        negative_prompt: str = "",
+        model: str = "",
+        size: str = "1024*1024",
+        n: int = 1,
+        style: str = "<auto>",
+        save_dir: str | None = None,
+    ) -> dict:
+        payload = {
+            "model": model or self.default_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": self._build_prompt(prompt, negative_prompt, size, style),
+                }
+            ],
+        }
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers=self.headers,
+            json=payload,
+            timeout=120,
+        )
+        response.raise_for_status()
+        data = response.json()
+        choices = data.get("choices") or []
+        if not choices:
+            raise RuntimeError(f"Nano Banana 2 响应缺少 choices: {data}")
+        message = choices[0].get("message") or {}
+        content = message.get("content")
+        if isinstance(content, list):
+            text_parts = []
+            for item in content:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    text_parts.append(str(item.get("text", "")))
+            content = "\n".join(text_parts)
+        content = str(content or "")
+        images = self._extract_data_images(content)
+        if not images:
+            raise RuntimeError("Nano Banana 2 未返回可解析的 base64 图片数据")
+        saved_paths = self._save_base64_images(images[: max(1, min(4, n))], save_dir)
+        return {
+            "urls": [],
+            "saved_paths": saved_paths,
+        }
+
+
 # ─────────────────────────────────────────────
 # Claude Skill 接口定义
 # ─────────────────────────────────────────────
@@ -284,6 +424,7 @@ def text_to_image_skill(
     style: str = "<auto>",
     save_dir: str | None = "./output",
     use_sdk: bool = False,
+    image_backend: str | None = None,
 ) -> dict:
     """
     Claude Skill：文生图
@@ -299,6 +440,7 @@ def text_to_image_skill(
         style:            风格（<auto>/<anime>/<photography>/<watercolor>/<oil-paint>/<sketch>/<flat-illustration>）
         save_dir:         本地保存目录
         use_sdk:          是否使用 dashscope SDK（默认 HTTP 直调）
+        image_backend:    图片后端（wanx / nano_banana_2）
 
     Returns:
         {
@@ -311,7 +453,21 @@ def text_to_image_skill(
         }
     """
     try:
-        if use_sdk and DASHSCOPE_AVAILABLE:
+        backend = ImageBackend((image_backend or _get_default_image_backend()).strip())
+        if backend == ImageBackend.NANO_BANANA_2:
+            client = NanoBananaImageClient()
+            result = client.generate(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                model=model or _get_nano_banana_model(),
+                size=size,
+                n=n,
+                style=style,
+                save_dir=save_dir,
+            )
+            urls = result["urls"]
+            saved_paths = result["saved_paths"]
+        elif use_sdk and DASHSCOPE_AVAILABLE:
             client = BailianText2ImageSDK()
             urls = client.generate(
                 prompt=prompt,
@@ -404,6 +560,12 @@ CLAUDE_TOOL_DEFINITION = {
                 ],
                 "description": "图像风格",
                 "default": "<auto>",
+            },
+            "image_backend": {
+                "type": "string",
+                "enum": ["wanx", "nano_banana_2"],
+                "description": "图片生成后端，默认 wanx，可切换为 Nano Banana 2 relay",
+                "default": "wanx",
             },
         },
         "required": ["prompt"],

@@ -41,6 +41,7 @@ def main() -> None:
     parser.add_argument("--need-open-comment", type=int, choices=[0, 1], default=None, help="Enable comments for WeChat draft")
     parser.add_argument("--only-fans-can-comment", type=int, choices=[0, 1], default=None, help="Allow only fans to comment")
     parser.add_argument("--image-model", default="wanx2.1-t2i-turbo", help="Image generation model")
+    parser.add_argument("--image-backend", choices=["wanx", "nano_banana_2"], default=os.getenv("IMAGE_BACKEND", "wanx") or "wanx", help="Image generation backend")
     parser.add_argument("--cover-size", default="1280*720", help="Cover image size")
     parser.add_argument("--body-size", default="1024*1024", help="Body image size")
     parser.add_argument("--image-style", default="<auto>", help="Image style")
@@ -57,6 +58,7 @@ def main() -> None:
             cover_size=args.cover_size,
             body_size=args.body_size,
             image_style=args.image_style,
+            image_backend=args.image_backend,
         )
     elif mode == "all":
         if not args.topic:
@@ -69,6 +71,7 @@ def main() -> None:
             cover_size=args.cover_size,
             body_size=args.body_size,
             image_style=args.image_style,
+            image_backend=args.image_backend,
         )
     elif mode == "publish":
         if not args.from_json:

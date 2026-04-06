@@ -4,7 +4,7 @@ from typing import Any
 
 from .generator import _slugify_filename
 from .github_uploader import GitHubImageUploader
-from .markdown_renderer import extract_markdown_images, markdown_to_wechat_html, replace_markdown_image_paths, strip_prompt_sections, strip_top_level_title
+from .markdown_renderer import extract_markdown_images, markdown_to_wechat_html, replace_markdown_image_paths, strip_leading_cover_image, strip_prompt_sections, strip_top_level_title
 from .wechat_client import WeChatOfficialAccountClient
 
 
@@ -121,7 +121,7 @@ def publish_existing_article_from_json(
         warnings = ["dry-run 预览中的图片链接使用 GitHub Pages，仅用于本地预览，不代表最终微信正文图片来源"]
         upload_mapping = uploader.plan_uploads(bundle_name, planned_paths)
         replaced_markdown = replace_markdown_image_paths(markdown_text, upload_mapping)
-        cleaned_markdown = strip_prompt_sections(strip_top_level_title(replaced_markdown))
+        cleaned_markdown = strip_leading_cover_image(strip_prompt_sections(strip_top_level_title(replaced_markdown)))
         html_content = markdown_to_wechat_html(cleaned_markdown)
         preview_path = bundle_dir / "article.wechat.preview.html"
         preview_path.write_text(html_content, encoding="utf-8")
@@ -161,7 +161,7 @@ def publish_existing_article_from_json(
         upload_mapping[item["path"]] = article_image["url"]
 
     replaced_markdown = replace_markdown_image_paths(markdown_text, upload_mapping)
-    cleaned_markdown = strip_prompt_sections(strip_top_level_title(replaced_markdown))
+    cleaned_markdown = strip_leading_cover_image(strip_prompt_sections(strip_top_level_title(replaced_markdown)))
     html_content = markdown_to_wechat_html(cleaned_markdown)
     preview_path = bundle_dir / "article.wechat.preview.html"
     preview_path.write_text(html_content, encoding="utf-8")
