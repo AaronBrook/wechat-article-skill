@@ -38,6 +38,7 @@ DEFAULT_IMAGE_BACKEND = os.environ.get("IMAGE_BACKEND", "wanx").strip() or "wanx
 NANO_BANANA_BASE_URL = os.environ.get("NANO_BANANA_BASE_URL", "https://api.laozhang.ai/v1").strip().rstrip("/")
 NANO_BANANA_API_KEY = os.environ.get("NANO_BANANA_API_KEY", "")
 NANO_BANANA_MODEL = os.environ.get("NANO_BANANA_MODEL", "gemini-3.1-flash-image-preview").strip() or "gemini-3.1-flash-image-preview"
+NANO_BANANA_TIMEOUT_SECONDS = int((os.environ.get("NANO_BANANA_TIMEOUT_SECONDS", "240") or "240").strip())
 _DATA_IMAGE_PATTERN = re.compile(r"data:image/(?P<ext>[a-zA-Z0-9.+-]+);base64,(?P<data>[A-Za-z0-9+/=\\s]+)")
 
 
@@ -59,6 +60,14 @@ def _get_nano_banana_api_key() -> str:
 
 def _get_nano_banana_model() -> str:
     return os.environ.get("NANO_BANANA_MODEL", NANO_BANANA_MODEL).strip() or "gemini-3.1-flash-image-preview"
+
+
+def _get_nano_banana_timeout_seconds() -> int:
+    raw_value = os.environ.get("NANO_BANANA_TIMEOUT_SECONDS", str(NANO_BANANA_TIMEOUT_SECONDS)).strip() or str(NANO_BANANA_TIMEOUT_SECONDS)
+    try:
+        return max(30, int(raw_value))
+    except ValueError:
+        return NANO_BANANA_TIMEOUT_SECONDS
 
 
 class ImageBackend(str, Enum):
@@ -374,6 +383,7 @@ class NanoBananaImageClient:
     ) -> dict:
         payload = {
             "model": model or self.default_model,
+            "stream": False,
             "messages": [
                 {
                     "role": "user",
@@ -385,7 +395,7 @@ class NanoBananaImageClient:
             f"{self.base_url}/chat/completions",
             headers=self.headers,
             json=payload,
-            timeout=120,
+            timeout=_get_nano_banana_timeout_seconds(),
         )
         response.raise_for_status()
         data = response.json()

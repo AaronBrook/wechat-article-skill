@@ -17,7 +17,7 @@
 
 当前常用配置：
 - Wanx：`DASHSCOPE_API_KEY`
-- Nano Banana 2：`NANO_BANANA_BASE_URL`、`NANO_BANANA_API_KEY`、`NANO_BANANA_MODEL`
+- Nano Banana 2：`NANO_BANANA_BASE_URL`、`NANO_BANANA_API_KEY`、`NANO_BANANA_MODEL`、`NANO_BANANA_TIMEOUT_SECONDS`
 - 后端选择：`IMAGE_BACKEND=wanx` 或 `IMAGE_BACKEND=nano_banana_2`
 
 用途分为两类：
@@ -27,6 +27,7 @@
 说明：
 - 真实发布时，最终仍然是把本地图片上传到微信，因此不管前面用 Wanx 还是 Nano Banana 2，后续发布链路都不需要变。
 - 默认仍是 Wanx，只有在显式切换 `IMAGE_BACKEND` 或传入 `--image-backend nano_banana_2` 时，才走 Nano Banana 2。
+- `gemini-3.1-flash-image-preview` 在部分 relay 上返回较慢，建议为 Nano Banana 2 预留更长超时；可通过 `NANO_BANANA_TIMEOUT_SECONDS` 调整，默认 `240` 秒。
 - 发布到公众号草稿箱时，正文会自动移除开头那张封面图，只保留公众号封面位，避免草稿预览里首图重复或显示异常。
 
 ## 项目结构
@@ -47,6 +48,7 @@ IMAGE_BACKEND=wanx
 NANO_BANANA_BASE_URL=https://api.laozhang.ai/v1
 NANO_BANANA_API_KEY=
 NANO_BANANA_MODEL=gemini-3.1-flash-image-preview
+NANO_BANANA_TIMEOUT_SECONDS=240
 
 WECHAT_OFFICIAL_ACCOUNT_APP_ID=
 WECHAT_OFFICIAL_ACCOUNT_APP_SECRET=
